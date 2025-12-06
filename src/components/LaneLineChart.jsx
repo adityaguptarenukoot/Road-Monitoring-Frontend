@@ -12,6 +12,7 @@ import {
   Filler
 } from 'chart.js';
 
+
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -23,6 +24,7 @@ ChartJS.register(
   Filler
 );
 
+
 const LaneLineChart = ({ rateHistory, lane, pollingInterval }) => {
   
   const chartData = useMemo(() => {
@@ -33,6 +35,7 @@ const LaneLineChart = ({ rateHistory, lane, pollingInterval }) => {
       };
     }
 
+
     // Generate time labels
     const labels = rateHistory.map((_, index) => {
       const seconds = index * pollingInterval;
@@ -40,6 +43,7 @@ const LaneLineChart = ({ rateHistory, lane, pollingInterval }) => {
       const secs = seconds % 60;
       return `${minutes}m ${secs}s`;
     });
+
 
     return {
       labels,
@@ -81,7 +85,7 @@ const LaneLineChart = ({ rateHistory, lane, pollingInterval }) => {
           label: 'Total Traffic Load',
           data: rateHistory.map(item => {
             const rates = item.rates || { '2WHLR': 0, 'LMV': 0, 'HMV': 0 };
-            return rates['2WHLR'] + rates['LMV'] + rates['HMV'];
+            return (rates['2WHLR'] * 0.5) + (rates['LMV'] * 1) + (rates['HMV'] * 2);
           }),
           borderColor: 'rgba(64, 224, 208, 1)',
           backgroundColor: 'rgba(64, 224, 208, 0.1)',
@@ -95,6 +99,7 @@ const LaneLineChart = ({ rateHistory, lane, pollingInterval }) => {
       ]
     };
   }, [rateHistory, pollingInterval]);
+
 
   const options = {
     responsive: true,
@@ -113,7 +118,7 @@ const LaneLineChart = ({ rateHistory, lane, pollingInterval }) => {
         labels: { 
           color: 'white',
           font: { size: 10 },
-          usePointStyle: true,
+          usePointStyle: true, 
           padding: 10,
           boxWidth: 15,
           boxHeight: 3
@@ -125,7 +130,7 @@ const LaneLineChart = ({ rateHistory, lane, pollingInterval }) => {
         titleColor: 'white',
         bodyColor: 'white',
         borderColor: 'rgba(255, 255, 255, 0.3)',
-        borderWidth: 1,
+        borderWidth: 1,     
         padding: 10,
         displayColors: true
       },
@@ -175,6 +180,7 @@ const LaneLineChart = ({ rateHistory, lane, pollingInterval }) => {
     }
   };
 
+
   return (
     <div className="h-full bg-gray-800 rounded-lg p-4">
       <div className="h-full">
@@ -183,5 +189,6 @@ const LaneLineChart = ({ rateHistory, lane, pollingInterval }) => {
     </div>
   );
 };
+
 
 export default LaneLineChart;

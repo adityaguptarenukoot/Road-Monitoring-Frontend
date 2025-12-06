@@ -6,12 +6,14 @@ import RateChart from '../components/RateChart';
 import VideoUpload from '../components/VideoUpload';
 import VideoFeed from '../components/VideoFeed';
 import ThresholdAlert from "../components/ThresholdAlert";
-import LineChart from "../components/LineChart";
+// import LineChart from "../components/LineChart";
 import AlarmHistory from "../components/AlarmHistory";
 import PollingDropdown from "../components/PollingDropdown";
 import LaneLineChart from "../components/LaneLineChart";
 import LiveAlarmDashboard from "../components/LiveAlarmDashboard";
 import Modal from "../components/Modal";
+import ThresholdSettings from "../components/ThresholdSettings";
+
 
 function Dashboard() {
   const [stats, setStats] = useState({
@@ -29,10 +31,32 @@ function Dashboard() {
   const [connected, setConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [rateHistory, setRateHistory] = useState([]);
-  const [pollingInterval, setPollingInterval] = useState(1);
+  const [pollingInterval, setPollingInterval] = useState(5);
   const MAX_HISTORY = Math.ceil(300 / pollingInterval);
+  
+  
+  const [backendSynced, setBackendSynced] = useState(false);
 
   const [expandedComponent, setExpandedComponent] = useState(null);
+
+  
+  useEffect(() => {
+    const syncBackendPollingRate = async () => {
+      setBackendSynced(false);
+      try {
+        await api.updatePollingRate(pollingInterval);
+        console.log('Backend polling rate synced to:', pollingInterval, 'seconds');
+        setBackendSynced(true);
+        
+        // Hide sync indicator after 2 seconds
+        setTimeout(() => setBackendSynced(false), 2000);
+      } catch (error) {
+        console.error('Failed to sync backend polling rate:', error);
+      }
+    };
+
+    syncBackendPollingRate();
+  }, [pollingInterval]); // Runs whenever user changes polling interval
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -49,6 +73,17 @@ function Dashboard() {
 
     fetchInitialData();
   }, []);
+
+
+//   What gets updated:
+
+// Vehicle counts (IN/OUT/Total)
+
+// Current rates (vehicles/minute)
+
+// Threshold alerts
+
+// Processing status
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -75,6 +110,17 @@ function Dashboard() {
 
     return () => clearInterval(interval);
   }, [isProcessing, pollingInterval]);
+
+
+//    backend to stop processing
+
+// Resets backend statistics
+
+// Resets all frontend states to zero/default
+
+// Cleans the history
+
+// Updates UI to show “Waiting for video”
 
   const handleStopAnalysis = async () => {
     try {
@@ -206,6 +252,7 @@ function Dashboard() {
   return (
     <div className="h-screen bg-gray-900 overflow-hidden flex flex-col p-4">
     
+      {/* Header with Status and Buttons */}
       <div className="flex-shrink-0 mb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -217,36 +264,53 @@ function Dashboard() {
                 {connected ? '🟢 Live' : '🔴 Disconnected'}
               </span>
             </p>
+            
+            {/* ✅ NEW: Backend Sync Indicator */}
+            {backendSynced && (
+              <p className="text-green-400 text-sm flex items-center gap-1 animate-fade-in">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Backend synced to {pollingInterval}s
+              </p>
+            )}
           </div>
 
-          {isProcessing && (
-            <button
-              onClick={handleStopAnalysis}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-all duration-300 flex items-center gap-2 shadow-lg"
-            >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <rect x="6" y="6" width="12" height="12" rx="1" />
-              </svg>
-              Stop Analysis
-            </button>
-          )}
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3">
+            {/* Threshold Settings Button */}
+            <ThresholdSettings />
+
+            {/* Stop Analysis Button */}
+            {isProcessing && (
+              <button
+                onClick={handleStopAnalysis}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-all duration-300 flex items-center gap-2 shadow-lg">
+              
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <rect x="6" y="6" width="12" height="12" rx="1" />
+                </svg>
+                Stop Analysis
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-  
+      {/* Threshold Alert Banner */}
       {stats.thresholds_crossed && stats.thresholds_crossed.length > 0 && (
         <div className="flex-shrink-0 mb-3">
           <ThresholdAlert thresholdsCrossed={stats.thresholds_crossed} />
         </div>
       )}
 
-  
+      {/* Main Grid - 60-40 SPLIT */}
       <div className="flex-1 grid grid-cols-10 gap-3 min-h-0">
         
-      
+        {/* LEFT SIDE - 60% (6 columns) */}
         <div className="col-span-6 flex flex-col gap-3 min-h-0">
           
-       
+          {/* Video Section */}
           <div className="flex-1 min-h-0">
             {!videoUploaded ? (
               <VideoUpload onUploadSuccess={handleUploadSuccess} />
@@ -255,13 +319,13 @@ function Dashboard() {
             )}
           </div>
 
-         
+          {/* Charts Row: OUT and IN lane */}
           <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
-      
+            {/* OUT Lane Chart */}
             <div 
               className="min-h-0 flex flex-col gap-2 cursor-pointer hover:ring-2 hover:ring-blue-500 rounded-lg transition-all"
-              onClick={() => setExpandedComponent('chart-out')}>
-            
+              onDoubleClick={() => setExpandedComponent('chart-out')}
+            >
               <div className="flex items-center justify-between bg-gray-800 rounded-t-lg px-3 py-1.5">
                 <PollingDropdown 
                   value={pollingInterval} 
@@ -281,14 +345,13 @@ function Dashboard() {
             {/* IN Lane Chart */}
             <div 
               className="min-h-0 flex flex-col gap-2 cursor-pointer hover:ring-2 hover:ring-blue-500 rounded-lg transition-all"
-              onClick={() => setExpandedComponent('chart-in')}
-            >
+              onDoubleClick={() => setExpandedComponent('chart-in')}>
+            
               <div className="flex items-center justify-between bg-gray-800 rounded-t-lg px-3 py-1.5">
                 <PollingDropdown 
                   value={pollingInterval} 
                   onChange={setPollingInterval}
-                  label="Update:"
-                />
+                  label="Update:" />
               </div>
               <div className="flex-1 min-h-0">
                 <LaneLineChart 
@@ -300,58 +363,59 @@ function Dashboard() {
             </div>
           </div>
 
-         
+          {/*  Alarm Dashboards Row */}
           <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
-
+            {/* OUT Alarms */}
             <div 
               className="min-h-0 cursor-pointer hover:ring-2 hover:ring-blue-500 rounded-lg transition-all"
-              onClick={() => setExpandedComponent('alarm-out')}
+              onDoubleClick={() => setExpandedComponent('alarm-out')}
             >
-              <LiveAlarmDashboard lane="OUT" videoUploaded={videoUploaded} />
+              <LiveAlarmDashboard lane="OUT" videoUploaded={videoUploaded} pollingInterval={pollingInterval}/>
             </div>
 
+            {/* IN Alarms */}
             <div 
               className="min-h-0 cursor-pointer hover:ring-2 hover:ring-blue-500 rounded-lg transition-all"
-              onClick={() => setExpandedComponent('alarm-in')}
+              onDoubleClick={() => setExpandedComponent('alarm-in')}
             >
-              <LiveAlarmDashboard lane="IN" videoUploaded={videoUploaded} />
+              <LiveAlarmDashboard lane="IN" videoUploaded={videoUploaded} pollingInterval={pollingInterval} />
             </div>
           </div>
         </div>
 
-
+        {/* RIGHT SIDE  */}
         <div className="col-span-4 flex flex-col gap-3 min-h-0">
           
-        
+          {/* 2x2 Grid: 3 Pie Charts + Stats Tile */}
           <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-3 min-h-0">
-
+            {/* Top Left: Total Pie */}
             <div 
               className="min-h-0 cursor-pointer hover:ring-2 hover:ring-blue-500 rounded-lg transition-all"
-              onClick={() => setExpandedComponent('pie-total')}>
-            
+              onDoubleClick={() => setExpandedComponent('pie-total')}
+            >
               <PieChart title="Total" data={stats.counts.total} />
             </div>
             
-        
+            {/* Top Right: Incoming Pie */}
             <div 
               className="min-h-0 cursor-pointer hover:ring-2 hover:ring-blue-500 rounded-lg transition-all"
-              onClick={() => setExpandedComponent('pie-incoming')}>
-            
+              onDoubleClick={() => setExpandedComponent('pie-incoming')}
+            >
               <PieChart title="Incoming" data={stats.counts.in} />
             </div>
             
-  
+            {/* Bottom Left: Outgoing Pie */}
             <div 
               className="min-h-0 cursor-pointer hover:ring-2 hover:ring-blue-500 rounded-lg transition-all"
-              onClick={() => setExpandedComponent('pie-outgoing')}
+              onDoubleClick={() => setExpandedComponent('pie-outgoing')}
             >
               <PieChart title="Outgoing" data={stats.counts.out} />
             </div>
             
-
+            {/* Bottom Right: Stats Tile */}
             <div className="min-h-0 bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg border border-gray-700 flex flex-col p-4">
               <div className="border-b border-gray-700 pb-2 mb-3">
-                <h3 className="text-white text-sm font-bold">📊 Live Stats</h3>
+                <h3 className="text-white text-sm font-bold">Live Stats</h3>
               </div>
 
               <div className="flex-1 flex flex-col justify-center gap-3">
@@ -373,19 +437,19 @@ function Dashboard() {
             </div>
           </div>
 
-     
+          {/* Alarm History Section */}
           <div className="flex-1 min-h-0">
             <AlarmHistory />
           </div>
         </div>
       </div>
 
-
+      {/* Modal for Expanded Components */}
       <Modal 
         isOpen={expandedComponent !== null}
         onClose={() => setExpandedComponent(null)}
-        title={getModalTitle()}>
-      
+        title={getModalTitle()}
+      >
         {renderExpandedComponent()}
       </Modal>
     </div>
