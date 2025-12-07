@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { api } from '../services/api';
 
+
+// yha pe vedio upload drag and drop overall vedio uploadind ko manage karta hai ye file
 const VideoUpload = ({ onUploadSuccess }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
   const [isDragging, setIsDragging] = useState(false);
 
+  // file choose ho raha hai
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -14,6 +17,8 @@ const VideoUpload = ({ onUploadSuccess }) => {
       setMessage('');
     }
   };
+
+  // jab aap drag karenge uske liye 
 
   const handleDragEnter = (e) => {
     e.preventDefault();
@@ -36,6 +41,8 @@ const VideoUpload = ({ onUploadSuccess }) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
+
+
 
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith('video/')) {
@@ -60,6 +67,8 @@ const VideoUpload = ({ onUploadSuccess }) => {
       setUploading(false);
       setMessage('Video uploaded successfully!');
       
+      // this is callback to tell the parent element that vedio uploaded 
+
       if (onUploadSuccess) onUploadSuccess(response);
       
       setTimeout(() => {

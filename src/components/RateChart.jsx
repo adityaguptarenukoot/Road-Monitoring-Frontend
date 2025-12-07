@@ -25,14 +25,14 @@ ChartJS.register(
 );
 
 const RateChart = ({ rates }) => {
-  // 🔴 DEBUGGING: Check what value is set
+  
   console.log('🔴 Component loaded with default: 20');
   
   const [historicalData, setHistoricalData] = useState([]);
   const [updateInterval, setUpdateInterval] = useState(20); // DEFAULT: 20 seconds
   const maxDataPoints = 30;
 
-  // 🔴 DEBUGGING: Check current value
+  
   console.log('🟢 Current updateInterval state:', updateInterval);
 
   useEffect(() => {
