@@ -11,7 +11,7 @@ import {
   Legend,
   Filler
 } from 'chart.js';
-import PollingDropdown from './PollingDropdown';
+
 
 ChartJS.register(
   CategoryScale,
@@ -159,14 +159,7 @@ const RateChart = ({ rates }) => {
           Vehicle Detection Rate (Default: 20s)
         </h3>
         
-        <PollingDropdown 
-          value={updateInterval} 
-          onChange={(val) => {
-            console.log('🔵 Dropdown changed to:', val);
-            setUpdateInterval(val);
-          }}
-          label="Update:"
-        />
+        
       </div>
 
       <div className="flex-1 min-h-0 relative">

@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
+import socketService from '../services/socket';
 import StatsCard from '../components/StatsCard';
 import PieChart from '../components/PieChart';
 import RateChart from '../components/RateChart';
 import VideoUpload from '../components/VideoUpload';
 import VideoFeed from '../components/VideoFeed';
 import ThresholdAlert from "../components/ThresholdAlert";
-// import LineChart from "../components/LineChart";
 import AlarmHistory from "../components/AlarmHistory";
-import PollingDropdown from "../components/PollingDropdown";
 import LaneLineChart from "../components/LaneLineChart";
 import LiveAlarmDashboard from "../components/LiveAlarmDashboard";
 import Modal from "../components/Modal";
@@ -31,12 +30,15 @@ function Dashboard() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [rateHistory, setRateHistory] = useState([]);
   const [pollingInterval, setPollingInterval] = useState(5);
-  const MAX_HISTORY = Math.ceil(300 / pollingInterval);
-
+ 
   const [backendSynced, setBackendSynced] = useState(false);
   const [expandedComponent, setExpandedComponent] = useState(null);
 
-  
+  const MAX_HISTORY = React.useMemo(
+    () => Math.ceil(300 / pollingInterval),
+    [pollingInterval]
+  );
+
   useEffect(() => {
     const syncBackendPollingRate = async () => {
       setBackendSynced(false);
@@ -45,6 +47,7 @@ function Dashboard() {
         console.log('Backend polling rate synced to:', pollingInterval, 'seconds');
         setBackendSynced(true);
         setTimeout(() => setBackendSynced(false), 2000);
+        setRateHistory([]);
       } catch (error) {
         console.error('Failed to sync backend polling rate:', error);
       }
@@ -53,51 +56,52 @@ function Dashboard() {
     syncBackendPollingRate();
   }, [pollingInterval]);
 
-  // Initial stats load
   useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        const response = await api.getCurrentStats();
-        setStats(response);
-        setConnected(true);
-        console.log('Initial data loaded:', response);
-      } catch (error) {
-        console.error('Failed to fetch initial data:', error);
-        setConnected(false);
+    const socket = socketService.connect();
+
+    socketService.on('connect', () => {
+      console.log('Socket connected to backend');
+      setConnected(true);
+    });
+
+    socketService.on('disconnect', () => {
+      console.log('Socket disconnected from backend');
+      setConnected(false);
+    });
+
+    socketService.on('stats_update', (data) => {
+      console.log('Stats update received via Socket.IO:', data);
+      setStats(data);
+
+      if (isProcessing && data.processing_status !== "Waiting for video upload...") {
+        console.log('Adding to history:', data.rates);
+        setRateHistory(prev => {
+          const newHistory = [...prev, { rates: data.rates }];
+          if (newHistory.length > MAX_HISTORY) {
+            return newHistory.slice(-MAX_HISTORY);
+          }
+          return newHistory;
+        });
       }
+    });
+
+   
+
+    socketService.on('video_uploaded', (data) => {
+      console.log('Video uploaded event received:', data);
+    });
+
+    socketService.on('threshold_updated', (thresholds) => {
+      console.log('Thresholds updated via Socket.IO:', thresholds);
+    });
+
+    return () => {
+      socketService.disconnect();
     };
+  }, [isProcessing, MAX_HISTORY]);
 
-    fetchInitialData();
-  }, []);
 
-  // Polling loop
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const response = await api.getCurrentStats();
-        setStats(response);
-        setConnected(true);
 
-        if (isProcessing && response.processing_status !== "Waiting for video upload...") {
-          console.log('Adding to history:', response.rates);
-          setRateHistory(prev => {
-            const newHistory = [...prev, { rates: response.rates }];
-            if (newHistory.length > MAX_HISTORY) {
-              return newHistory.slice(-MAX_HISTORY);
-            }
-            return newHistory;
-          });
-        }
-      } catch (error) {
-        console.error('Polling failed:', error);
-        setConnected(false);
-      }
-    }, pollingInterval * 1000);
-
-    return () => clearInterval(interval);
-  }, [isProcessing, pollingInterval, MAX_HISTORY]);
-
-  // Stop analysis
   const handleStopAnalysis = async () => {
     try {
       await api.stopProcessing();
@@ -118,21 +122,23 @@ function Dashboard() {
         processing_status: 'Waiting for video',
       });
 
-      console.log('✓ Analysis stopped and reset to zero');
+      console.log('Analysis stopped and reset to zero');
     } catch (error) {
       console.error('Failed to stop analysis:', error);
     }
   };
 
-  // Upload success from VideoUpload
   const handleUploadSuccess = (response) => {
-    
     console.log('Response from backend:', response);
     setVideoUploaded(true);
     setIsProcessing(true);
     setRateHistory([]);
     console.log('videoUploaded set to true, isProcessing set to true');
   };
+
+
+
+
 
   const totalIn =
     stats.counts.in['2WHLR'] +
@@ -144,7 +150,7 @@ function Dashboard() {
     stats.counts.out['LMV'] +
     stats.counts.out['HMV'];
 
-  const totalVehicles = totalIn + totalOut;
+  const totalVehicles = totalIn - totalOut;
 
   const renderExpandedComponent = () => {
     switch (expandedComponent) {
@@ -171,13 +177,22 @@ function Dashboard() {
       case 'alarm-out':
         return (
           <div className="h-full">
-            <LiveAlarmDashboard lane="OUT" videoUploaded={videoUploaded} />
+            <LiveAlarmDashboard 
+              lane="OUT" 
+              videoUploaded={videoUploaded}
+              thresholdsCrossed={stats.thresholds_crossed || []}
+            />
           </div>
         );
       case 'alarm-in':
         return (
           <div className="h-full">
-            <LiveAlarmDashboard lane="IN" videoUploaded={videoUploaded} />
+            <LiveAlarmDashboard 
+              lane="IN" 
+              videoUploaded={videoUploaded}
+              
+              thresholdsCrossed={stats.thresholds_crossed || []}
+            />
           </div>
         );
       case 'pie-total':
@@ -224,10 +239,8 @@ function Dashboard() {
 
   return (
     <div className="h-screen bg-gray-900 overflow-hidden flex flex-col p-4">
-      {/* Header with Status and Buttons */}
       <div className="flex-shrink-0 mb-3">
         <div className="flex items-center justify-between">
-          {/* LEFT: status / connection / backend sync */}
           <div className="flex items-center gap-4">
             <p className="text-gray-400 text-sm">
               Status:{' '}
@@ -238,9 +251,21 @@ function Dashboard() {
             <p className="text-gray-400 text-sm">
               Connection:{' '}
               <span className={connected ? 'text-green-400' : 'text-red-400'}>
-                {connected ? '🟢 Live' : '🔴 Disconnected'}
+                {connected ? '🟢 Live ' : '🔴 Disconnected'}
               </span>
             </p>
+
+            {isProcessing && (
+              <button
+                onClick={handleStopAnalysis}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-all duration-300 flex items-center gap-2 shadow-lg"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <rect x="6" y="6" width="12" height="12" rx="1" />
+                </svg>
+                Stop Analysis
+              </button>
+            )}
 
             {backendSynced && (
               <p className="text-green-400 text-sm flex items-center gap-1 animate-fade-in">
@@ -256,37 +281,23 @@ function Dashboard() {
             )}
           </div>
 
-          {/* RIGHT: action buttons */}
           <div className="flex items-center gap-3">
-            <ThresholdSettings />
-
-            {isProcessing && (
-              <button
-                onClick={handleStopAnalysis}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-all duration-300 flex items-center gap-2 shadow-lg"
-              >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <rect x="6" y="6" width="12" height="12" rx="1" />
-                </svg>
-                Stop Analysis
-              </button>
-            )}
+            <ThresholdSettings
+              pollingInterval={pollingInterval}
+              onChangePollingInterval={setPollingInterval}
+            />
           </div>
         </div>
       </div>
 
-      {/* Threshold Alert Banner */}
       {stats.thresholds_crossed && stats.thresholds_crossed.length > 0 && (
         <div className="flex-shrink-0 mb-3">
           <ThresholdAlert thresholdsCrossed={stats.thresholds_crossed} />
         </div>
       )}
 
-      
       <div className="flex-1 grid grid-cols-10 gap-3 min-h-0">
-        
         <div className="col-span-6 flex flex-col gap-3 min-h-0">
-        
           <div className="flex-1 min-h-0">
             {!videoUploaded ? (
               <div className="h-full">
@@ -299,19 +310,15 @@ function Dashboard() {
             )}
           </div>
 
-          {/* Charts Row */}
           <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
-            {/* OUT Lane Chart */}
             <div
               className="min-h-0 flex flex-col gap-2 cursor-pointer hover:ring-2 hover:ring-blue-500 rounded-lg transition-all"
-              onDoubleClick={() => setExpandedComponent('chart-out')}>
-            
+              onDoubleClick={() => setExpandedComponent('chart-out')}
+            >
               <div className="flex items-center justify-between bg-gray-800 rounded-t-lg px-3 py-1.5">
-                <PollingDropdown
-                  value={pollingInterval}
-                  onChange={setPollingInterval}
-                  label="Update:"
-                />
+                <span className="text-xs font-semibold text-gray-300">
+                  OUT Lane - Rate per Minute
+                </span>
               </div>
               <div className="flex-1 min-h-0">
                 <LaneLineChart
@@ -322,17 +329,14 @@ function Dashboard() {
               </div>
             </div>
 
-            {/* IN Lane Chart */}
             <div
               className="min-h-0 flex flex-col gap-2 cursor-pointer hover:ring-2 hover:ring-blue-500 rounded-lg transition-all"
               onDoubleClick={() => setExpandedComponent('chart-in')}
             >
               <div className="flex items-center justify-between bg-gray-800 rounded-t-lg px-3 py-1.5">
-                <PollingDropdown
-                  value={pollingInterval}
-                  onChange={setPollingInterval}
-                  label="Update:"
-                />
+                <span className="text-xs font-semibold text-gray-300">
+                  IN Lane - Rate per Minute
+                </span>
               </div>
               <div className="flex-1 min-h-0">
                 <LaneLineChart
@@ -344,7 +348,6 @@ function Dashboard() {
             </div>
           </div>
 
-          {/* Alarm Dashboards */}
           <div className="flex-1 grid grid-cols-2 gap-3 min-h-0">
             <div
               className="min-h-0 cursor-pointer hover:ring-2 hover:ring-blue-500 rounded-lg transition-all"
@@ -353,7 +356,8 @@ function Dashboard() {
               <LiveAlarmDashboard
                 lane="OUT"
                 videoUploaded={videoUploaded}
-                pollingInterval={pollingInterval}
+                
+                thresholdsCrossed={stats.thresholds_crossed || []}
               />
             </div>
 
@@ -364,13 +368,13 @@ function Dashboard() {
               <LiveAlarmDashboard
                 lane="IN"
                 videoUploaded={videoUploaded}
-                pollingInterval={pollingInterval}
+                
+                thresholdsCrossed={stats.thresholds_crossed || []}
               />
             </div>
           </div>
         </div>
 
-        {/* RIGHT SIDE */}
         <div className="col-span-4 flex flex-col gap-3 min-h-0">
           <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-3 min-h-0">
             <div
@@ -399,21 +403,37 @@ function Dashboard() {
                 <h3 className="text-white text-sm font-bold">Live Stats</h3>
               </div>
 
-              <div className="flex-1 flex flex-col justify-center gap-3">
-                <div className="bg-blue-900/20 border border-blue-700/50 rounded px-3 py-2">
-                  <p className="text-blue-300 text-xs font-medium">Total</p>
-                  <p className="text-white text-2xl font-bold">{totalVehicles}</p>
-                </div>
-
-                <div className="bg-green-900/20 border border-green-700/50 rounded px-3 py-2">
-                  <p className="text-green-300 text-xs font-medium">Incoming</p>
-                  <p className="text-white text-xl font-bold">{totalIn}</p>
-                </div>
-
-                <div className="bg-orange-900/20 border border-orange-700/50 rounded px-3 py-2">
-                  <p className="text-orange-300 text-xs font-medium">Outgoing</p>
-                  <p className="text-white text-xl font-bold">{totalOut}</p>
-                </div>
+              <div className="flex-1 flex items-center justify-center">
+                <table className="w-full h-full border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="border border-gray-600 bg-gray-700/50 p-2 text-gray-300 font-semibold text-sm"></th>
+                      <th className="border border-gray-600 bg-purple-900/30 p-2 text-purple-300 font-semibold text-sm">2WHLR</th>
+                      <th className="border border-gray-600 bg-cyan-900/30 p-2 text-cyan-300 font-semibold text-sm">LMV</th>
+                      <th className="border border-gray-600 bg-yellow-900/30 p-2 text-yellow-300 font-semibold text-sm">HMV</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="border border-gray-600 bg-blue-900/20 p-3 text-blue-300 font-semibold text-center">Total</td>
+                      <td className="border border-gray-600 p-3 text-white font-bold text-lg text-center">{stats.counts.total['2WHLR']}</td>
+                      <td className="border border-gray-600 p-3 text-white font-bold text-lg text-center">{stats.counts.total['LMV']}</td>
+                      <td className="border border-gray-600 p-3 text-white font-bold text-lg text-center">{stats.counts.total['HMV']}</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-gray-600 bg-green-900/20 p-3 text-green-300 font-semibold text-center">In</td>
+                      <td className="border border-gray-600 p-3 text-white font-bold text-lg text-center">{stats.counts.in['2WHLR']}</td>
+                      <td className="border border-gray-600 p-3 text-white font-bold text-lg text-center">{stats.counts.in['LMV']}</td>
+                      <td className="border border-gray-600 p-3 text-white font-bold text-lg text-center">{stats.counts.in['HMV']}</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-gray-600 bg-orange-900/20 p-3 text-orange-300 font-semibold text-center">Out</td>
+                      <td className="border border-gray-600 p-3 text-white font-bold text-lg text-center">{stats.counts.out['2WHLR']}</td>
+                      <td className="border border-gray-600 p-3 text-white font-bold text-lg text-center">{stats.counts.out['LMV']}</td>
+                      <td className="border border-gray-600 p-3 text-white font-bold text-lg text-center">{stats.counts.out['HMV']}</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>

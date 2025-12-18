@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { api } from '../services/api';
 
 
-// yha pe vedio upload drag and drop overall vedio uploadind ko manage karta hai ye file
+// yha pe vedio upload drag and drop overall vedio uploadind ko manage karta hai ye 
 const VideoUpload = ({ onUploadSuccess }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);

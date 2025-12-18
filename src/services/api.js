@@ -69,7 +69,7 @@ export const api = {
     return response.data;
   },
 
-  // ✅ NEW: Update backend polling rate
+  // Update backend polling rate
   updatePollingRate: async (intervalSeconds) => {
     const response = await axios.post(`${API_BASE_URL}/polling-rate`, {
       interval: intervalSeconds
@@ -77,7 +77,7 @@ export const api = {
     return response.data;
   },
 
-  // ✅ NEW: Get current backend polling rate
+  // Get current backend polling rate
   getPollingRate: async () => {
     const response = await axios.get(`${API_BASE_URL}/polling-rate`);
     return response.data;
