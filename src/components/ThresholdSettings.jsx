@@ -26,25 +26,7 @@ const ThresholdSettings = ({onChangePollingInterval }) => {
   // single global time period derived from out lane
   const globalTimePeriod = thresholds.out?.time_period ?? 5;
 
-  // useEffect(() => {
-  //   if (isOpen) {
-  //     fetchThresholds();
-  //   }
-  // }, [isOpen]);
 
-  // const fetchThresholds = async () => {
-  //   try {
-  //     const response = await axios.get('http://localhost:5001/api/thresholds');
-  //     if (response.data && response.data.thresholds) {
-  //       setThresholds(response.data.thresholds);
-  //     }
-  //     setError(null);
-  //   } catch (err) {
-  //     console.error('Failed to fetch thresholds:', err);
-  //     setError('Failed to load thresholds. Using defaults.');
-  //     setThresholds(defaultThresholds);
-  //   }
-  // };
 
 
   const handleGlobalTimePeriodChange = (value) => {
